@@ -1,0 +1,7 @@
+opencv-python>=4.9.0
+python-dotenv>=1.0.0
+ultralytics>=8.0.0
+pyyaml>=6.0
+numpy>=1.24.0
+pillow>=10.0.0
+coremltools>=8.0

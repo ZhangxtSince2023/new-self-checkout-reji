@@ -1,0 +1,23 @@
+[project]
+name = "self-checkout-monitor"
+version = "0.1.0"
+description = "Self-checkout screen monitoring and analysis system"
+readme = "README.md"
+requires-python = "==3.11.*"
+dependencies = [
+    "opencv-python>=4.9",
+    "python-dotenv>=1.0",
+    "ultralytics>=8.0.0",
+    "pyyaml>=6.0",
+    "numpy>=1.24.0",
+    "pillow>=10.0.0",
+    "coremltools>=8.0",
+]
+
+[project.scripts]
+rtsp-demo = "main:main"
+
+[tool.uv]
+dev-dependencies = []
+
+
