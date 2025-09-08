@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, Optional
 from ultralytics import YOLO
 from .rtsp_stream import RTSPStream
+from .device_state import DeviceStateManager
 from ..utils.logger import Logger
 from ..utils.config_loader import ConfigLoader
 
@@ -78,6 +79,7 @@ class ScreenAnalyzer:
         self.is_running = False
         self.threads: Dict[str, threading.Thread] = {}
         self.logger = Logger()
+        self.state_manager = DeviceStateManager(logger=self.logger)
         
         # 多进程相关
         self.input_queue: Optional[Queue] = None
@@ -147,9 +149,19 @@ class ScreenAnalyzer:
                     
                     # 只记录置信度高于阈值的结果
                     if results['confidence'] >= self.confidence_threshold:
+                        # 更新设备状态
+                        state_event = self.state_manager.update_state(
+                            device_id,
+                            results['class'],  # 检测到的状态 (idle/start/scan/list)
+                            results['confidence'],
+                            results['timestamp']
+                        )
+                        
+                        # 如果有状态变化，记录到日志
+                        if state_event:
+                            results['state_event'] = state_event
+                        
                         self._log_results(device_id, results)
-                        print(f"[{device_id}] Analysis results: Class={results['class']}, "
-                              f"Confidence={results['confidence']:.2%}")
                               
             except:
                 continue
@@ -226,3 +238,10 @@ class ScreenAnalyzer:
     def _log_results(self, device_id: str, results: Dict):
         """记录结果到日志"""
         self.logger.log(device_id, results)
+    
+    def get_device_status(self, device_id: str = None) -> Dict:
+        """获取设备状态信息"""
+        if device_id:
+            return self.state_manager.get_device_session_info(device_id)
+        else:
+            return self.state_manager.get_all_devices_status()

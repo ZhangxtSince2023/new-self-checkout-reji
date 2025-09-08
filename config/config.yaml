@@ -9,5 +9,5 @@ device:
 detection:
   detector_count: 5  # Number of parallel YOLO detectors
   model_path: "models/best.mlpackage"
-  confidence_threshold: 0.5
+  confidence_threshold: 0.8
   analysis_interval: 0.5  # Interval in seconds between frame analysis

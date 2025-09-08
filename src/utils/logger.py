@@ -1,5 +1,4 @@
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any
@@ -21,6 +20,25 @@ class Logger:
                 "device_id": device_id,
                 "data": data
             }
+            
+            # 如果有状态事件，创建单独的事件日志
+            if 'state_event' in data:
+                event = data['state_event']
+                event_log_file = self.log_dir / f"{today}_events.log"
+                event_entry = {
+                    "timestamp": datetime.now().isoformat(),
+                    "device_id": device_id,
+                    "event_type": event.get('event_type'),
+                    "old_state": event.get('old_state'),
+                    "new_state": event.get('new_state'),
+                    "details": event.get('details', {})
+                }
+                
+                try:
+                    with open(event_log_file, 'a', encoding='utf-8') as f:
+                        f.write(json.dumps(event_entry, ensure_ascii=False) + '\n')
+                except Exception as e:
+                    print(f"Error writing to event log: {e}")
             
             try:
                 with open(log_file, 'a', encoding='utf-8') as f:
