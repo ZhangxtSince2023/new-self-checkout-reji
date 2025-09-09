@@ -1,6 +1,6 @@
 device:
   "210":
-    hostip: 192.168.1.212
+    hostip: 192.168.1.200
   # Add more devices as needed
   # "211":
   #   hostip: 192.168.1.213

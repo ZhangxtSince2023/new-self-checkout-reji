@@ -79,7 +79,7 @@ class ScreenAnalyzer:
         self.is_running = False
         self.threads: Dict[str, threading.Thread] = {}
         self.logger = Logger()
-        self.state_manager = DeviceStateManager(logger=self.logger)
+        self.state_manager = DeviceStateManager(logger=self.logger, config_loader=config_loader)
         
         # 多进程相关
         self.input_queue: Optional[Queue] = None

@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 from typing import Dict, Optional, List, Tuple
 from pathlib import Path
+from .device_notifier import DeviceNotifier
 
 
 class DeviceState:
@@ -35,11 +36,12 @@ class DeviceState:
 class DeviceStateManager:
     """所有设备的状态管理器"""
     
-    def __init__(self, log_dir: str = "log", logger=None):
+    def __init__(self, log_dir: str = "log", logger=None, config_loader=None):
         self.devices: Dict[str, DeviceState] = {}
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(exist_ok=True)
         self.logger = logger  # 可选的外部日志器
+        self.notifier = DeviceNotifier(config_loader, logger) if config_loader else None  # 设备通知器
         
     def update_state(self, device_id: str, detected_state: str, confidence: float, timestamp: float) -> Dict:  # confidence 参数保留以保持API一致性
         """
@@ -84,8 +86,9 @@ class DeviceStateManager:
             'details': {}
         }
         
-        # idle -> start: 会计开始
-        if old_state == "idle" and new_state == "start":
+        # 会计开始: 从 idle 或 list 转换到 start 都算开始
+        # 只有在没有活跃会话时才算新的会计开始
+        if new_state == "start" and (old_state == "idle" or (old_state == "list" and not device.session_id)):
             device.session_id = str(uuid.uuid4())
             device.session_start = timestamp
             device.scan_count = 0  # 重置扫描计数
@@ -98,6 +101,10 @@ class DeviceStateManager:
             
             self._log_state_message(device.id, f"===== 会计开始 ===== Session: {device.session_id[:8]}...")
             
+            # 发送会计开始通知（code 101）
+            if self.notifier:
+                self.notifier.send_session_start(device.id)
+            
         # * -> scan: 扫描商品（只记录状态变化时的一次）
         elif new_state == "scan" and old_state != "scan":
             device.scan_count += 1
@@ -109,6 +116,10 @@ class DeviceStateManager:
             }
             
             self._log_state_message(device.id, f"扫描商品 #{device.scan_count}")
+            
+            # 发送扫描商品通知（code 102）
+            if self.notifier:
+                self.notifier.send_product_scan(device.id)
             
         # scan -> list: 从扫描切换到查看列表
         elif old_state == "scan" and new_state == "list":
@@ -127,6 +138,10 @@ class DeviceStateManager:
             
             self._log_state_message(device.id, f"扫描商品 #{device.scan_count}")
             
+            # 发送扫描商品通知（code 102）
+            if self.notifier:
+                self.notifier.send_product_scan(device.id)
+            
         # * -> idle: 会计结束
         elif new_state == "idle" and old_state != "idle":
             if device.session_start:
@@ -141,6 +156,10 @@ class DeviceStateManager:
                 }
                 
                 self._log_state_message(device.id, f"===== 会计结束 ===== 时长: {duration:.1f}秒, 扫描: {device.scan_count}次")
+                
+                # 发送会计结束通知（code 106）
+                if self.notifier:
+                    self.notifier.send_session_end(device.id)
                 
                 # 重置设备状态
                 device.reset()
