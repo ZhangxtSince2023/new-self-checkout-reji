@@ -1,7 +1,9 @@
 import requests
 import json
+import time
 from datetime import datetime
 from pathlib import Path
+import paho.mqtt.client as mqtt
 
 
 class DeviceNotifier:
@@ -146,3 +148,105 @@ class DeviceNotifier:
             102,
             "商品スキャン"
         )
+
+    def send_mqtt_dismiss(self, device_id: str) -> bool:
+        """
+        向设备发送MQTT dismiss命令
+
+        Args:
+            device_id: 设备ID
+
+        Returns:
+            bool: 是否发送成功
+        """
+        try:
+            # 获取设备配置
+            devices_config = self.config_loader.config.get('device', {})
+            device_config = devices_config.get(device_id)
+
+            if not device_config:
+                print(f"[DeviceNotifier] Device {device_id} not found in config")
+                return False
+
+            # 获取目标设备ID
+            target_device_id = device_config.get('target_device_id')
+            if not target_device_id:
+                print(f"[DeviceNotifier] No target_device_id found for device {device_id}")
+                return False
+
+            # 获取MQTT配置
+            mqtt_config = self.config_loader.config.get('alter_neko', {})
+            mqtt_broker = mqtt_config.get('mqtt_broker')
+            mqtt_port = mqtt_config.get('mqtt_port', 1883)
+            mqtt_topic = mqtt_config.get('mqtt_topic', 'display/alert')
+
+            if not mqtt_broker:
+                print(f"[DeviceNotifier] No MQTT broker configured")
+                return False
+
+            # 创建MQTT客户端
+            client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"reji_{device_id}")
+
+            try:
+                # 连接到MQTT broker
+                client.connect(mqtt_broker, mqtt_port, 60)
+
+                # 构建消息
+                message = {
+                    "text": "",
+                    "command": "dismiss",
+                    "targetDeviceId": target_device_id,
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ")
+                }
+
+                # 发送消息
+                result = client.publish(mqtt_topic, json.dumps(message, ensure_ascii=False))
+
+                if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                    print(f"[DeviceNotifier] ✅ Dismiss 命令已发送到 {target_device_id}")
+                    self._log_mqtt_dismiss(device_id, target_device_id, "Success")
+                    return True
+                else:
+                    print(f"[DeviceNotifier] ❌ Dismiss 命令发送失败: {result.rc}")
+                    self._log_mqtt_dismiss(device_id, target_device_id, f"Failed: {result.rc}")
+                    return False
+
+            finally:
+                client.disconnect()
+
+        except Exception as e:
+            print(f"[DeviceNotifier] Error sending MQTT dismiss: {e}")
+            self._log_mqtt_dismiss(device_id, target_device_id if 'target_device_id' in locals() else "unknown", str(e))
+            return False
+
+    def _log_mqtt_dismiss(self, device_id: str, target_device_id: str, status: str):
+        """记录MQTT dismiss命令到日志文件"""
+        timestamp = datetime.now()
+
+        # 如果有外部logger，使用它
+        if self.logger:
+            log_data = {
+                "timestamp": timestamp.timestamp(),
+                "type": "mqtt_dismiss",
+                "target_device_id": target_device_id,
+                "status": status
+            }
+            self.logger.log(device_id, log_data)
+
+        # 同时写入专门的通知日志文件
+        log_entry = {
+            "timestamp": timestamp.isoformat(),
+            "device_id": device_id,
+            "type": "mqtt_dismiss",
+            "target_device_id": target_device_id,
+            "status": status
+        }
+
+        today = timestamp.strftime("%Y-%m-%d")
+        notification_log_file = self.log_dir / f"{today}_notifications.log"
+
+        try:
+            with open(notification_log_file, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
+        except Exception as e:
+            print(f"Error writing to notification log: {e}")

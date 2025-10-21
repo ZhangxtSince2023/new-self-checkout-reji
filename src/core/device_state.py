@@ -197,18 +197,20 @@ class DeviceStateManager:
         # * -> scan: 扫描商品（只记录状态变化时的一次）
         elif new_state == "scan" and old_state != "scan":
             device.scan_count += 1
-            
+
             event['event_type'] = 'product_scan'
             event['details'] = {
                 'scan_number': device.scan_count,
                 'session_id': device.session_id
             }
-            
+
             self._log_state_message(device.id, f"扫描商品 #{device.scan_count}")
-            
+
             # 发送扫描商品通知（code 102）
             if self.notifier:
                 self.notifier.send_product_scan(device.id)
+                # 发送 MQTT dismiss 命令
+                self.notifier.send_mqtt_dismiss(device.id)
             
         # scan -> list: 从扫描切换到查看列表
         elif old_state == "scan" and new_state == "list":
@@ -218,18 +220,20 @@ class DeviceStateManager:
         # list -> scan: 从列表切换回扫描
         elif old_state == "list" and new_state == "scan":
             device.scan_count += 1
-            
+
             event['event_type'] = 'product_scan'
             event['details'] = {
                 'scan_number': device.scan_count,
                 'session_id': device.session_id
             }
-            
+
             self._log_state_message(device.id, f"扫描商品 #{device.scan_count}")
-            
+
             # 发送扫描商品通知（code 102）
             if self.notifier:
                 self.notifier.send_product_scan(device.id)
+                # 发送 MQTT dismiss 命令
+                self.notifier.send_mqtt_dismiss(device.id)
             
         # 会话结束（两种情况）：
         # 1. 正常买单：scan/list -> over
